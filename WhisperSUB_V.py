@@ -28,6 +28,17 @@ LOG_FILE = LOG_DIR / "app.log"
 LOGGER = logging.getLogger("WhisperSUB_V")
 
 
+
+def subprocess_no_window_kwargs() -> dict:
+    if os.name != "nt":
+        return {}
+
+    startup = subprocess.STARTUPINFO()
+    startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    return {
+        "creationflags": subprocess.CREATE_NO_WINDOW,
+        "startupinfo": startup,
+    }
 def setup_logging() -> None:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     if LOGGER.handlers:
@@ -325,7 +336,7 @@ def prepare_audio_for_whisper(input_path: Path) -> tuple[Path, Path | None, floa
     ]
 
     t0 = time.perf_counter()
-    proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", **subprocess_no_window_kwargs())
     elapsed = time.perf_counter() - t0
 
     if proc.returncode != 0 or not wav_path.exists():
@@ -530,7 +541,7 @@ def detect_speech_bounds(media_path: Path, start_ms: int, end_ms: int) -> tuple[
         "null",
         "NUL",
     ]
-    proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", **subprocess_no_window_kwargs())
     text = proc.stderr
 
     starts = [float(x) for x in re.findall(r"silence_start:\s*([0-9.]+)", text)]
@@ -785,7 +796,7 @@ class SubtitleEditorWindow(tk.Toplevel):
             str(self.media_path),
         ]
         try:
-            self.ffplay_proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            self.ffplay_proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **subprocess_no_window_kwargs())
         except Exception as exc:
             messagebox.showerror("Loi", f"Khong mo duoc mpv: {exc}", parent=self)
             self.ffplay_proc = None
@@ -1640,13 +1651,13 @@ class TranslatorApp:
             if use_vad:
                 cmd.extend(["--vad", "-vm", to_windows_short_path(vad_model), "-vt", str(vad_threshold)])
 
-            proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+            proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", **subprocess_no_window_kwargs())
             err = proc.stderr.strip()
             vad_fallback_used = False
 
             if proc.returncode != 0 and use_vad and is_vad_model_error(err):
                 vad_fallback_used = True
-                proc = subprocess.run(base_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                proc = subprocess.run(base_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", **subprocess_no_window_kwargs())
 
             pass1_elapsed = time.perf_counter() - pass1_t0
             err = proc.stderr.strip()
@@ -1725,6 +1736,7 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = TranslatorApp(root)
     root.mainloop()
+
 
 
 
