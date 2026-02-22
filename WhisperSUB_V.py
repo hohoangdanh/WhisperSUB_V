@@ -1,5 +1,6 @@
 ﻿import ctypes
 import json
+import logging
 import os
 import re
 import shutil
@@ -21,6 +22,26 @@ DEFAULT_THREADS = max(4, (os.cpu_count() or 8) // 2)
 DEFAULT_MAX_SUBTITLE_LEN = 55
 SAVE_DIR = APP_DIR / "save_files"
 SAVE_DIR.mkdir(parents=True, exist_ok=True)
+APP_VERSION = "1.0.0"
+LOG_DIR = APP_DIR / "logs"
+LOG_FILE = LOG_DIR / "app.log"
+LOGGER = logging.getLogger("WhisperSUB_V")
+
+
+def setup_logging() -> None:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    if LOGGER.handlers:
+        return
+
+    LOGGER.setLevel(logging.INFO)
+    formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
+
+    file_handler = logging.FileHandler(LOG_FILE, encoding="utf-8")
+    file_handler.setFormatter(formatter)
+    LOGGER.addHandler(file_handler)
+
+    LOGGER.info("=== WhisperSUB_V start v%s ===", APP_VERSION)
+
 LANG_OPTIONS = ["auto", "en", "vi", "ja", "ko", "zh", "fr", "de", "es"]
 DEFAULT_DOWNLOAD_URLS = {
     "model": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin?download=true",
@@ -1208,7 +1229,7 @@ class MissingComponentsWindow(tk.Toplevel):
 class TranslatorApp:
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("WhisperSUB_V - Subtitle Translator (Whisper)")
+        self.root.title(f"WhisperSUB_V v{APP_VERSION} - Subtitle Translator (Whisper)")
         self.root.geometry("900x640")
 
         self.audio_path = tk.StringVar()
@@ -1384,6 +1405,9 @@ class TranslatorApp:
     def append_output(self, text: str) -> None:
         self.output.insert("end", text)
         self.output.see("end")
+        msg = text.strip()
+        if msg:
+            LOGGER.info(msg)
 
     def open_editor(self) -> None:
         if not self.last_media or not self.last_srt or not self.last_srt.exists():
@@ -1697,9 +1721,20 @@ class TranslatorApp:
 
 
 if __name__ == "__main__":
+    setup_logging()
     root = tk.Tk()
     app = TranslatorApp(root)
     root.mainloop()
+
+
+
+
+
+
+
+
+
+
 
 
 

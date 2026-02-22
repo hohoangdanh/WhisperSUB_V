@@ -1,0 +1,8 @@
+﻿# WhisperSUB_V requirements
+# Python: 3.9+
+
+# Runtime dependencies used by this app are from Python standard library.
+# tkinter is required and usually bundled with official Windows Python installers.
+
+# Optional (for building EXE)
+pyinstaller>=6.0
