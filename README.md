@@ -1,4 +1,4 @@
-﻿# DichThuat (Whisper GUI)
+﻿# WhisperSUB_V (Whisper GUI)
 
 Ứng dụng desktop dịch video/audio ra phụ đề `.srt` bằng `whisper.cpp` (`whisper-cli.exe`) và model `ggml-large-v3.bin`.
 
@@ -110,9 +110,9 @@ Sau đó copy thêm các thư mục/file cần thiết cạnh file exe:
 
 ---
 
-# English Version
+# English
 
-DichThuat is a desktop app that generates `.srt` subtitles from video/audio using `whisper.cpp` (`whisper-cli.exe`) and `ggml-large-v3.bin`.
+WhisperSUB_V is a desktop app that generates `.srt` subtitles from video/audio using `whisper.cpp` (`whisper-cli.exe`) and `ggml-large-v3.bin`.
 
 ## Main Features
 - Simple UI for selecting media and exporting SRT.
@@ -169,3 +169,4 @@ Language presets included:
 pyinstaller --noconfirm --clean --onefile --windowed app.py
 ```
 Then place `models/` and `Release/` next to the built exe.
+

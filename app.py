@@ -461,7 +461,7 @@ class SubtitleEditorWindow(tk.Toplevel):
 
         self.ffplay_proc = None
         self.ffplay_hwnd = 0
-        self.ffplay_title = f"DichEditor_{os.getpid()}_{id(self)}"
+        self.ffplay_title = f"WhisperSUBV_Editor_{os.getpid()}_{id(self)}"
         self.mpv_pipe_path = ""
         self.mpv_pipe = None
         self.mpv_lock = threading.RLock()
@@ -476,7 +476,7 @@ class SubtitleEditorWindow(tk.Toplevel):
         self.last_tick_wall = 0.0
         self._updating_seek = False
 
-        self.overlay_dir = Path(tempfile.mkdtemp(prefix="dich_overlay_"))
+        self.overlay_dir = Path(tempfile.mkdtemp(prefix="whispersubv_overlay_"))
         self.overlay_srt = self.overlay_dir / "overlay.srt"
         write_srt(self.overlay_srt, self.entries)
 
@@ -587,7 +587,7 @@ class SubtitleEditorWindow(tk.Toplevel):
         return bool(self.ffplay_proc and self.ffplay_proc.poll() is None)
 
     def _new_mpv_pipe_path(self) -> str:
-        return rf"\\.\pipe\dich_mpv_{os.getpid()}_{id(self)}_{int(time.time() * 1000)}"
+        return rf"\\.\pipe\whispersubv_mpv_{os.getpid()}_{id(self)}_{int(time.time() * 1000)}"
 
     def _connect_mpv_ipc(self, timeout_sec: float = 5.0) -> bool:
         deadline = time.perf_counter() + max(0.2, timeout_sec)
@@ -1057,7 +1057,7 @@ class AdvancedSettingsWindow(tk.Toplevel):
 class TranslatorApp:
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("Dich thuat video/audio ra SRT (Whisper)")
+        self.root.title("WhisperSUB_V - Subtitle Translator (Whisper)")
         self.root.geometry("900x640")
 
         self.audio_path = tk.StringVar()
@@ -1479,6 +1479,7 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = TranslatorApp(root)
     root.mainloop()
+
 
 
 
