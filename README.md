@@ -1,172 +1,95 @@
-﻿# WhisperSUB_V (Whisper GUI)
+﻿# WhisperSUB_V
 
-Ứng dụng desktop dịch video/audio ra phụ đề `.srt` bằng `whisper.cpp` (`whisper-cli.exe`) và model `ggml-large-v3.bin`.
+WhisperSUB_V là phần mềm tạo phụ đề `.srt` từ video/audio bằng `whisper.cpp` và có SRT Editor để chỉnh tay.
 
-## Tính năng chính
-- Giao diện đơn giản để chọn file và xuất SRT.
-- Hỗ trợ GPU (CUDA/OpenVINO nếu bản build Whisper có backend tương ứng).
-- Hỗ trợ VAD để giảm lặp câu.
-- SRT Editor tích hợp: xem video, sửa timeline/text, thêm/xóa dòng sub.
-- Save/Load progress để mở lại dự án đã làm.
-- Chế độ nâng cao (Advanced mode): chỉnh tham số giải mã + preset theo ngôn ngữ.
+## Thành phần bắt buộc để app chạy
+Đặt đúng file vào đúng thư mục như sau:
 
-## Cấu trúc thư mục cần thiết
-Dự án được thiết kế để chạy tại thư mục gốc như sau:
-
-- `app.py`
-- `models/ggml-large-v3.bin`
-- `Release/whisper-cli.exe`
-- `Release/ffmpeg.exe` (hoặc ffmpeg trong PATH)
-- `Release/mpv.exe` (hoặc mpv trong PATH)
-- `Release/silero_vad.onnx` (nếu muốn bật VAD)
-- `save_files/` (tự tạo khi chạy)
-
-Lưu ý: app ưu tiên tìm file trong `Release/` trước, sau đó mới đến PATH hệ thống.
-
-## Yêu cầu hệ thống
-- Windows 10/11
-- Python 3.10+
-- Dung lượng trống đủ cho model (~3GB với large-v3)
-- Nếu dùng GPU: cần bản `whisper-cli.exe` đã build hỗ trợ CUDA/OpenVINO
-
-## Chạy ứng dụng
-```powershell
-python app.py
+```text
+WhisperSUB_V/
+├─ WhisperSUB_V.py
+├─ WhisperSUB_V.spec
+├─ README.md
+├─ models/
+│  └─ ggml-large-v3.bin
+├─ Release/
+│  ├─ whisper-cli.exe (hoặc main.exe)
+│  ├─ ffmpeg.exe
+│  ├─ mpv.exe
+│  └─ silero_vad.bin / silero_v5.1.2.bin / silero_vad.onnx
+└─ docs/images/ (tuỳ chọn, để chứa screenshot)
 ```
 
-## Quy trình sử dụng cơ bản
-1. Mở app.
-2. Chọn `Whisper CLI` (`Release/whisper-cli.exe`).
-3. Chọn file video/audio đầu vào.
-4. Chọn ngôn ngữ nguồn (`auto`, `en`, `vi`, `ja`, `ko`, `zh`, `fr`, `de`, `es`).
-5. Chọn profile cơ bản (`Nhanh`, `Cân bằng`, `Chính xác`) nếu cần.
-6. Bấm `Xuất SRT`.
-7. Sau khi xong, file `.srt` được lưu cùng thư mục với file media gốc (cùng tên file).
+## Link tải chính thức
+- whisper.cpp releases: https://github.com/ggml-org/whisper.cpp/releases
+- Model `ggml-large-v3.bin`: https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin?download=true
+- FFmpeg download: https://www.ffmpeg.org/download.html
+- MPV releases: https://github.com/mpv-player/mpv/releases
+- Whisper VAD model (`silero_v5.1.2.bin`): https://huggingface.co/ggml-org/whisper-vad/resolve/main/silero_v5.1.2.bin?download=true
+- Silero VAD repo: https://github.com/snakers4/silero-vad
 
-Ví dụ:
-- Input: `M:\Video\sample.mp4`
-- Output: `M:\Video\sample.srt`
+## Tính năng
+- Xuất `.srt` từ nhiều định dạng media.
+- Hỗ trợ GPU/CPU.
+- VAD giảm lặp câu.
+- SRT Editor tích hợp (sửa text/timeline, thêm/xóa dòng).
+- Advanced mode + preset ngôn ngữ.
+- Nút `Tai file thieu` để tải nhanh thành phần còn thiếu.
 
-## Chế độ nâng cao
-Bấm nút `Chế độ nâng cao` trên màn hình chính.
-
-### Nhóm tham số
-- Sampling/Decoding: `temperature`, `temperature-inc`, `best-of`, `beam-size`
-- Drop đoạn: `no-speech-thold`, `entropy-thold`, `logprob-thold`
-- VAD: `--vad`, `vad-threshold`
-- Context: `max-context`, `no-fallback`
-- Language: `--language`
-
-### Preset ngôn ngữ có sẵn
-- `auto`
-- `en (English)`
-- `vi (Vietnamese)`
-- `ja (Japanese)`
-- `ko (Korean)`
-- `zh (Chinese)`
-- `fr (French)`
-- `de (German)`
-- `es (Spanish)`
-
-Preset sẽ tự động điền các tham số phù hợp để giảm drop câu và tăng độ ổn định theo từng ngôn ngữ.
-
-## Save/Load progress
-- `Save Progress`: lưu thông tin media, SRT và cấu hình app vào file `.json` (thường trong `save_files/`).
-- `Load Progress`: mở lại project để tiếp tục sửa SRT mà không cần chạy lại từ đầu.
-
-## Ghi chú quan trọng
-- App hiện tại xuất file `.srt` (không xuất `.txt`/`.wav`).
-- Để tránh lỗi tên file Unicode/ký tự đặc biệt, app dùng file tạm ASCII trong quá trình xử lý và copy kết quả về tên gốc.
-- Nếu bật VAD mà fail model, app sẽ fallback chạy không VAD.
-
-## Lỗi thường gặp
-1. `Không tìm thấy model`
-- Kiểm tra file `models/ggml-large-v3.bin` tồn tại đúng đường dẫn.
-
-2. `Không tìm thấy whisper-cli.exe`
-- Kiểm tra `Release/whisper-cli.exe` hoặc chọn lại bằng nút `Chọn`.
-
-3. Không đọc được audio/video
-- Kiểm tra ffmpeg (`Release/ffmpeg.exe` hoặc PATH).
-- Thử chạy tay: `ffmpeg -version`.
-
-4. Không phát được video trong editor
-- Kiểm tra mpv (`Release/mpv.exe` hoặc PATH).
-- Thử chạy tay: `mpv --version`.
-
-5. Vẫn chạy CPU thay vì GPU
-- Kiểm tra bản `whisper-cli.exe` có build hỗ trợ GPU không.
-- Kiểm tra log trong app: nếu backend GPU hợp lệ sẽ hiện thông tin CUDA/OpenVINO.
-
-## Đóng gói exe (tham khảo)
-Nếu đã cài PyInstaller:
+## Cách dùng nhanh
+1. Chạy:
 ```powershell
-pyinstaller --noconfirm --clean --onefile --windowed app.py
+python WhisperSUB_V.py
 ```
-Sau đó copy thêm các thư mục/file cần thiết cạnh file exe:
-- `models/`
-- `Release/`
-- `save_files/` (tự tạo nếu chưa có)
+2. Nếu thiếu file, bấm `Tai file thieu` trong app.
+3. Dán link tải cho từng thành phần rồi bấm `Tai ngay`.
+4. Chọn file media và bấm `Xuat SRT`.
+
+## Build EXE
+```powershell
+pyinstaller --noconfirm --clean WhisperSUB_V.spec
+```
+Output: `dist/WhisperSUB_V/WhisperSUB_V.exe`
+
+## Lưu ý
+- Nút tải tự động hoạt động tốt nhất với URL file trực tiếp hoặc file `.zip`.
+- Với URL trang chủ release/download, bạn cần mở trang đó và lấy link file trực tiếp phù hợp Windows x64.
+- App hiện xuất chính `.srt`.
 
 ---
 
 # English
 
-WhisperSUB_V is a desktop app that generates `.srt` subtitles from video/audio using `whisper.cpp` (`whisper-cli.exe`) and `ggml-large-v3.bin`.
+WhisperSUB_V generates `.srt` subtitles from video/audio using `whisper.cpp` and includes a built-in subtitle editor.
 
-## Main Features
-- Simple UI for selecting media and exporting SRT.
-- GPU support (CUDA/OpenVINO if your Whisper build supports it).
-- Optional VAD to reduce repeated lines.
-- Built-in SRT Editor: preview video, edit timeline/text, add/delete subtitle entries.
-- Save/Load progress for long projects.
-- Advanced mode with decoding parameters and language presets.
+## Required files/folders
+Place files exactly like this:
 
-## Required Folder Structure
-- `app.py`
-- `models/ggml-large-v3.bin`
-- `Release/whisper-cli.exe`
-- `Release/ffmpeg.exe` (or ffmpeg in PATH)
-- `Release/mpv.exe` (or mpv in PATH)
-- `Release/silero_vad.onnx` (optional, for VAD)
-- `save_files/` (auto-created)
+```text
+WhisperSUB_V/
+├─ WhisperSUB_V.py
+├─ WhisperSUB_V.spec
+├─ models/ggml-large-v3.bin
+└─ Release/
+   ├─ whisper-cli.exe (or main.exe)
+   ├─ ffmpeg.exe
+   ├─ mpv.exe
+   └─ silero_vad.bin / silero_v5.1.2.bin / silero_vad.onnx
+```
 
-## Requirements
-- Windows 10/11
-- Python 3.10+
-- Enough disk space for model files (~3GB for large-v3)
-- GPU usage requires a GPU-enabled `whisper-cli.exe` build
+## Download links
+- whisper.cpp releases: https://github.com/ggml-org/whisper.cpp/releases
+- ggml-large-v3 model: https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin?download=true
+- FFmpeg: https://www.ffmpeg.org/download.html
+- MPV: https://github.com/mpv-player/mpv/releases
+- Whisper VAD model: https://huggingface.co/ggml-org/whisper-vad/resolve/main/silero_v5.1.2.bin?download=true
 
 ## Run
 ```powershell
-python app.py
+python WhisperSUB_V.py
 ```
 
-## Basic Workflow
-1. Select `Whisper CLI`.
-2. Select input video/audio.
-3. Choose source language (`auto`, `en`, `vi`, `ja`, `ko`, `zh`, `fr`, `de`, `es`).
-4. Click `Xuat SRT`.
-5. Output `.srt` is saved next to the source media with the same base name.
-
-## Advanced Mode
-Use `Che do nang cao` to tune:
-- `temperature`, `temperature-inc`, `best-of`, `beam-size`
-- `no-speech-thold`, `entropy-thold`, `logprob-thold`
-- `--vad`, `vad-threshold`
-- `max-context`, `no-fallback`, `--language`
-
-Language presets included:
-- `auto`, `en`, `vi`, `ja`, `ko`, `zh`, `fr`, `de`, `es`
-
-## Notes
-- Output format is `.srt` only.
-- The app uses temporary ASCII filenames internally, then copies the final result back to the original Unicode path.
-- If VAD fails to initialize, the app can fallback to non-VAD mode.
-
-## Packaging (Reference)
+## Build EXE
 ```powershell
-pyinstaller --noconfirm --clean --onefile --windowed app.py
+pyinstaller --noconfirm --clean WhisperSUB_V.spec
 ```
-Then place `models/` and `Release/` next to the built exe.
-

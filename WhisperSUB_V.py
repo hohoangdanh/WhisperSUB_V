@@ -7,6 +7,9 @@ import subprocess
 import tempfile
 import threading
 import time
+import urllib.parse
+import urllib.request
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 import tkinter as tk
@@ -19,6 +22,13 @@ DEFAULT_MAX_SUBTITLE_LEN = 55
 SAVE_DIR = APP_DIR / "save_files"
 SAVE_DIR.mkdir(parents=True, exist_ok=True)
 LANG_OPTIONS = ["auto", "en", "vi", "ja", "ko", "zh", "fr", "de", "es"]
+DEFAULT_DOWNLOAD_URLS = {
+    "model": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin?download=true",
+    "whisper_cli": "https://github.com/ggml-org/whisper.cpp/releases",
+    "ffmpeg": "https://www.ffmpeg.org/download.html",
+    "mpv": "https://github.com/mpv-player/mpv/releases",
+    "vad": "https://huggingface.co/ggml-org/whisper-vad/resolve/main/silero_v5.1.2.bin?download=true",
+}
 ADVANCED_PRESETS = {
     "auto": {
         "temperature": 0.2,
@@ -172,6 +182,104 @@ def find_mpv() -> str | None:
     return str(local) if local.exists() else None
 
 
+
+def required_components() -> list[dict]:
+    return [
+        {
+            "key": "model",
+            "label": "Model ggml-large-v3.bin",
+            "path": APP_DIR / "models" / "ggml-large-v3.bin",
+            "aliases": ["ggml-large-v3.bin"],
+        },
+        {
+            "key": "whisper_cli",
+            "label": "whisper-cli.exe",
+            "path": APP_DIR / "Release" / "whisper-cli.exe",
+            "aliases": ["whisper-cli.exe", "main.exe"],
+        },
+        {
+            "key": "ffmpeg",
+            "label": "ffmpeg.exe",
+            "path": APP_DIR / "Release" / "ffmpeg.exe",
+            "aliases": ["ffmpeg.exe"],
+        },
+        {
+            "key": "mpv",
+            "label": "mpv.exe",
+            "path": APP_DIR / "Release" / "mpv.exe",
+            "aliases": ["mpv.exe"],
+        },
+        {
+            "key": "vad",
+            "label": "VAD model (silero)",
+            "path": APP_DIR / "Release" / "silero_vad.bin",
+            "aliases": ["silero_vad.bin", "silero_v5.1.2.bin", "silero_vad.onnx", "silero-vad.onnx"],
+        },
+    ]
+
+
+def normalize_download_url(url: str) -> str:
+    u = url.strip()
+    if not u:
+        return u
+    u = u.replace("/blob/", "/resolve/") if "huggingface.co/" in u and "/blob/" in u else u
+    u = u.replace("/blob/", "/raw/") if "github.com/" in u and "/blob/" in u else u
+    return u
+
+
+def _download_to_file(url: str, out_file: Path) -> None:
+    req = urllib.request.Request(url, headers={"User-Agent": "WhisperSUB_V/1.0"})
+    with urllib.request.urlopen(req, timeout=90) as resp, out_file.open("wb") as f:
+        shutil.copyfileobj(resp, f)
+
+
+def _find_first_matching_file(root_dir: Path, candidate_names: list[str]) -> Path | None:
+    names = {n.lower() for n in candidate_names}
+    for p in root_dir.rglob("*"):
+        if p.is_file() and p.name.lower() in names:
+            return p
+    return None
+
+
+def _save_component_from_url(url: str, target: Path, aliases: list[str]) -> None:
+    fixed_url = normalize_download_url(url)
+    if not fixed_url:
+        raise RuntimeError("URL trong")
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp_dir = Path(tempfile.mkdtemp(prefix="whispersubv_dl_"))
+    try:
+        parsed = urllib.parse.urlparse(fixed_url)
+        guessed = Path(parsed.path).name or target.name
+        tmp_file = tmp_dir / guessed
+        _download_to_file(fixed_url, tmp_file)
+
+        if zipfile.is_zipfile(tmp_file):
+            extract_dir = tmp_dir / "extract"
+            extract_dir.mkdir(parents=True, exist_ok=True)
+            with zipfile.ZipFile(tmp_file, "r") as zf:
+                zf.extractall(extract_dir)
+            match = _find_first_matching_file(extract_dir, aliases)
+            if not match:
+                raise RuntimeError("Zip khong chua file can thiet")
+            shutil.copyfile(match, target)
+            return
+
+        shutil.copyfile(tmp_file, target)
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+def find_vad_model_path() -> Path | None:
+    candidates = [
+        APP_DIR / "Release" / "silero_vad.bin",
+        APP_DIR / "Release" / "silero_v5.1.2.bin",
+        APP_DIR / "Release" / "silero_vad.onnx",
+        APP_DIR / "silero_vad.onnx",
+    ]
+    for p in candidates:
+        if p.exists():
+            return p
+    return None
 def prepare_audio_for_whisper(input_path: Path) -> tuple[Path, Path | None, float]:
     ffmpeg = find_ffmpeg()
     if not ffmpeg:
@@ -1054,6 +1162,49 @@ class AdvancedSettingsWindow(tk.Toplevel):
         name = self.app.advanced_preset.get().strip()
         self.app.apply_advanced_preset(name)
 
+
+class MissingComponentsWindow(tk.Toplevel):
+    def __init__(self, master: tk.Tk, app: "TranslatorApp", missing_specs: list[dict]):
+        super().__init__(master)
+        self.app = app
+        self.missing_specs = missing_specs
+        self.url_vars: dict[str, tk.StringVar] = {}
+
+        self.title("Tai file con thieu")
+        self.geometry("860x360")
+        self.transient(master)
+
+        frame = ttk.Frame(self, padding=12)
+        frame.pack(fill="both", expand=True)
+
+        ttk.Label(frame, text="Cac thanh phan con thieu - dien URL truc tiep (file hoac zip):").grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 10))
+
+        for idx, spec in enumerate(self.missing_specs, start=1):
+            ttk.Label(frame, text=f"{spec['label']} -> {spec['path']}").grid(row=idx * 2 - 1, column=0, columnspan=3, sticky="w")
+            default_url = DEFAULT_DOWNLOAD_URLS.get(spec["key"], "")
+            var = tk.StringVar(value=default_url)
+            self.url_vars[spec["key"]] = var
+            ttk.Entry(frame, textvariable=var).grid(row=idx * 2, column=0, columnspan=2, sticky="we", pady=(2, 8))
+            ttk.Button(frame, text="Paste", command=lambda v=var: self._paste(v)).grid(row=idx * 2, column=2, padx=(8, 0), sticky="e")
+
+        btns = ttk.Frame(frame)
+        btns.grid(row=999, column=0, columnspan=3, sticky="e", pady=(8, 0))
+        ttk.Button(btns, text="Tai ngay", command=self._start_download).pack(side="right")
+        ttk.Button(btns, text="Dong", command=self.destroy).pack(side="right", padx=(0, 8))
+
+        frame.columnconfigure(0, weight=1)
+        frame.columnconfigure(1, weight=1)
+
+    def _paste(self, var: tk.StringVar) -> None:
+        try:
+            var.set(self.clipboard_get().strip())
+        except Exception:
+            pass
+
+    def _start_download(self) -> None:
+        url_by_key = {k: v.get().strip() for k, v in self.url_vars.items()}
+        self.app.start_download_missing(self.missing_specs, url_by_key)
+        self.destroy()
 class TranslatorApp:
     def __init__(self, root: tk.Tk):
         self.root = root
@@ -1084,6 +1235,7 @@ class TranslatorApp:
 
         self.is_running = False
         self.advanced_window: AdvancedSettingsWindow | None = None
+        self.download_window: MissingComponentsWindow | None = None
         self.last_media: Path | None = None
         self.last_srt: Path | None = None
 
@@ -1127,6 +1279,7 @@ class TranslatorApp:
         ttk.Button(btns, text="Save Progress", command=self.save_progress_main).pack(side="left", padx=(8, 0))
         ttk.Button(btns, text="Load Progress", command=self.load_progress_main).pack(side="left", padx=(8, 0))
         ttk.Button(btns, text="Che do nang cao", command=self.open_advanced_mode).pack(side="left", padx=(8, 0))
+        ttk.Button(btns, text="Tai file thieu", command=self.open_missing_components).pack(side="left", padx=(8, 0))
         self.open_editor_btn = ttk.Button(btns, text="Mo SRT Editor", command=self.open_editor, state="disabled")
         self.open_editor_btn.pack(side="left", padx=(8, 0))
 
@@ -1141,6 +1294,74 @@ class TranslatorApp:
         frame.columnconfigure(4, weight=1)
         frame.rowconfigure(8, weight=1)
 
+    def _get_missing_components(self) -> list[dict]:
+        missing: list[dict] = []
+        for spec in required_components():
+            p: Path = spec["path"]
+            if spec["key"] == "whisper_cli":
+                selected = self.whisper_cli_path.get().strip()
+                if selected and Path(selected).exists():
+                    continue
+            if not p.exists():
+                missing.append(spec)
+        return missing
+
+    def open_missing_components(self) -> None:
+        missing = self._get_missing_components()
+        if not missing:
+            messagebox.showinfo("Thong bao", "Khong co thanh phan nao bi thieu.")
+            return
+        if self.download_window and self.download_window.winfo_exists():
+            self.download_window.lift()
+            self.download_window.focus_force()
+            return
+        self.download_window = MissingComponentsWindow(self.root, self, missing)
+
+    def start_download_missing(self, specs: list[dict], url_by_key: dict[str, str]) -> None:
+        threading.Thread(target=self._download_missing_worker, args=(specs, url_by_key), daemon=True).start()
+
+    def _download_missing_worker(self, specs: list[dict], url_by_key: dict[str, str]) -> None:
+        self.root.after(0, lambda: self.set_status("Dang tai file con thieu..."))
+        self.root.after(0, lambda: self.append_output("[Setup] Bat dau tai file con thieu...\n"))
+
+        ok_count = 0
+        fail_count = 0
+        for spec in specs:
+            key = spec["key"]
+            label = spec["label"]
+            target: Path = spec["path"]
+            aliases: list[str] = spec["aliases"]
+            url = (url_by_key.get(key, "") or "").strip()
+
+            if not url:
+                fail_count += 1
+                self.root.after(0, lambda l=label: self.append_output(f"[Setup] Thieu URL cho {l}\n"))
+                continue
+
+            try:
+                self.root.after(0, lambda l=label: self.append_output(f"[Setup] Dang tai {l} ...\n"))
+                _save_component_from_url(url, target, aliases)
+                if not target.exists():
+                    raise RuntimeError("Khong tao duoc file dich")
+
+                if key == "whisper_cli":
+                    self.root.after(0, lambda p=str(target): self.whisper_cli_path.set(p))
+
+                ok_count += 1
+                self.root.after(0, lambda p=target: self.append_output(f"[Setup] OK: {p}\n"))
+            except Exception as exc:
+                fail_count += 1
+                self.root.after(0, lambda l=label, e=str(exc): self.append_output(f"[Setup] Loi {l}: {e}\n"))
+
+        def finish() -> None:
+            self.append_output(f"[Setup] Hoan tat. Thanh cong: {ok_count}, That bai: {fail_count}\n")
+            self.set_status("San sang")
+            if fail_count == 0:
+                messagebox.showinfo("Thong bao", "Da tai xong cac thanh phan bi thieu.")
+            else:
+                messagebox.showwarning("Thong bao", "Da tai xong mot phan. Kiem tra log de bo sung URL con thieu.")
+
+        self.root.after(0, finish)
     def choose_cli(self) -> None:
         path = filedialog.askopenfilename(title="Chon whisper-cli.exe", filetypes=[("Executable", "*.exe"), ("All files", "*.*")])
         if path:
@@ -1343,9 +1564,9 @@ class TranslatorApp:
             logprob_thold = min(0.0, float(self.logprob_thold.get()))
             max_context = max(0, int(self.max_context.get()))
             vad_threshold = min(1.0, max(0.0, float(self.vad_threshold.get())))
+            vad_model = find_vad_model_path()
+            use_vad = (vad_model is not None) and self.use_vad.get()
 
-            vad_model = APP_DIR / "Release" / "silero_vad.onnx"
-            use_vad = vad_model.exists() and self.use_vad.get()
 
             output_prefix = (temp_dir / "result") if temp_dir else media.with_suffix("")
 
@@ -1443,7 +1664,7 @@ class TranslatorApp:
                     self.append_output(f"- tong thoi gian: {total_elapsed:.2f}s\n")
 
                     if use_vad and not vad_fallback_used:
-                        self.append_output("\n[VAD] Dang bat silero_vad.onnx de giam lap/hallucination.\n")
+                        self.append_output("\n[VAD] Dang bat VAD model de giam lap/hallucination.\n")
                     if vad_fallback_used:
                         self.append_output("\n[VAD] Model VAD khong tuong thich voi whisper-cli hien tai, da tu dong chay lai khong VAD.\n")
 
@@ -1479,6 +1700,24 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = TranslatorApp(root)
     root.mainloop()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

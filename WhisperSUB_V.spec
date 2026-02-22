@@ -2,10 +2,10 @@
 
 
 a = Analysis(
-    ['app.py'],
+    ['WhisperSUB_V.py'],
     pathex=[],
     binaries=[],
-    datas=[('models', 'models'), ('Release', 'Release'), ('silero_vad.onnx', '.'), ('README.md', '.')],
+    datas=[('models', 'models'), ('Release', 'Release'), ('README.md', '.'), ('docs', 'docs')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -42,5 +42,6 @@ coll = COLLECT(
     upx_exclude=[],
     name='WhisperSUB_V',
 )
+
 
 
